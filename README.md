@@ -37,7 +37,7 @@ python3 upload_repo.py https://github.com/torvalds/linux https://codegraph.guard
 1. **Resolve Target Commit**: If no commit is specified, resolves the remote HEAD.
 2. **Pre-flight Check**: Checks if the repository is already indexed at the target commit or if a job is already pending/processing/completed.
 3. **Clone Repository**: Creates a blobless clone in a temporary directory.
-4. **Calculate Changes**: Compares the target commit against the server's last indexed commit to identify new, modified, and deleted files.
+4. **Calculate Changes**: Verifies the target commit is a descendant of the last indexed commit, then identifies new, modified, and deleted files.
 5. **Package Payload**: Creates a ZIP file containing the change list and the modified file contents.
 6. **Upload**: Sends the payload to the Codegraph API for indexing.
 7. **Cleanup**: Removes the temporary clone directory.
@@ -45,6 +45,7 @@ python3 upload_repo.py https://github.com/torvalds/linux https://codegraph.guard
 ## Features
 
 - **Incremental Indexing**: Only uploads files that have changed since the last indexed commit.
+- **Ancestor Verification**: Ensures the target commit is a descendant of the server's current state.
 - **Duplicate Prevention**: Skips upload if the target commit is already indexed or if a job is already in progress.
 - **Efficient Cloning**: Uses blobless clones to minimize bandwidth and storage.
 - **Automatic Cleanup**: Removes temporary files after upload.
