@@ -61,8 +61,8 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
     # 3. Prepare Temp Clone
     tmp_dir = tempfile.mkdtemp(prefix=f"cg_clone_{repo_name}_")
     try:
-        print(f"[*] Cloning repository (blobless) to {tmp_dir}...")
-        subprocess.check_call(["git", "clone", "--filter=blob:none", "--quiet", repo_url, tmp_dir])
+        print(f"[*] Cloning repository (treeless) to {tmp_dir}...")
+        subprocess.check_call(["git", "clone", "--filter=tree:0", "--quiet", repo_url, tmp_dir])
         
         # 4. Get last_commit from server to calculate diff
         last_commit = None
