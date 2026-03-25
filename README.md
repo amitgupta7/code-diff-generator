@@ -39,6 +39,40 @@ Update all repositories already known to the server:
 curl -s https://codegraph.guardops.ai/repo | jq -r '.repos[] | select (.remote_url != null) | .remote_url' | xargs -I {} python3 upload_repo.py {} https://codegraph.guardops.ai
 ```
 
+## Makefile Targets
+
+A `Makefile` is provided to simplify running the script in various environments.
+
+### Variables
+
+You can override these variables when running `make`:
+- `REPO_URL`: URL of the repository to index.
+- `API_URL`: URL of the Codegraph API.
+- `COMMIT_ID`: *(Optional)* Specific commit to index.
+- `IMAGE`: Docker image to use (default: `cicirello/pyaction:latest`).
+- `NAMESPACE`: Kubernetes namespace (default: `upload-repo`).
+
+### Local & Container Execution
+
+- `make local-run`: Runs the script directly using the local Python environment.
+  ```bash
+  make local-run REPO_URL=https://github.com/torvalds/linux COMMIT_ID=a1b2c3d
+  ```
+- `make docker-run`: Runs the script inside a Docker container.
+  ```bash
+  make docker-run REPO_URL=https://github.com/torvalds/linux
+  ```
+- `make kube-run`: Packages the script as a ConfigMap and launches a one-off `kubectl run` pod in a dedicated namespace.
+  ```bash 
+  make kube-run REPO_URL=https://github.com/torvalds/linux API_URL=http://search-api-service.default.svc.cluster.local:8000 COMMIT_ID=a1b2c3d
+  ```
+
+### Utility Targets
+
+- `make configmap`: Only generates the `upload-repo-configmap.yaml` file.
+- `make kube-clean`: Deletes the entire Kubernetes namespace and all its resources.
+- `make clean`: Removes the local generated YAML file and runs `kube-clean`.
+
 ## How It Works
 
 1. **Resolve Target Commit**: If no commit is specified, resolves the remote HEAD.
