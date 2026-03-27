@@ -16,7 +16,7 @@ def run_cmd(args, cwd=None):
         print(f"[!] Error running {' '.join(args)}: {e.output.decode('utf-8')}")
         raise
 
-def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
+def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None, branch: str | None = None):
     # Calculate REPO_NAME from REPO_URL
     repo_name = repo_url.split("/")[-1].replace(".git", "")
     print(f"[*] Repo Name: {repo_name}")
@@ -38,7 +38,7 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
     print(f"[*] Checking server status for {repo_name} at commit {target_commit}...")
     try:
         # Check current repo status
-        repo_resp = run_cmd(["curl", "-s", f"{api_url}/repo/{repo_name}"])
+        repo_resp = run_cmd(["curl", "-G", "-s", f"{api_url}/repo/{repo_name}", "--data-urlencode", f"remote_url={repo_url}"])
         repo_info = json.loads(repo_resp)
         if "stats" in repo_info:
             stats = repo_info["stats"]
@@ -47,7 +47,7 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
                 return
         
         # Check for existing job
-        job_resp = run_cmd(["curl", "-s", f"{api_url}/job?repo={repo_name}&commit_id={target_commit}"])
+        job_resp = run_cmd(["curl", "-G", "-s", f"{api_url}/job", "--data", f"repo={repo_name}", "--data", f"commit_id={target_commit}", "--data-urlencode", f"remote_url={repo_url}"])
         job_info = json.loads(job_resp)
         if "status" in job_info:
             status = job_info["status"]
@@ -64,10 +64,14 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
         print(f"[*] Cloning repository (treeless) to {tmp_dir}...")
         subprocess.check_call(["git", "clone", "--filter=tree:0", "--quiet", repo_url, tmp_dir])
         
+        # Branch detection and repo_name update
+        repo_name = select_branch_name(repo_name, tmp_dir, target_commit, branch)
+        print(f"[*] Resolved Repo Name: {repo_name}")
+
         # 4. Get last_commit from server to calculate diff
         last_commit = None
         try:
-            repo_resp = run_cmd(["curl", "-s", f"{api_url}/repo/{repo_name}"])
+            repo_resp = run_cmd(["curl", "-G", "-s", f"{api_url}/repo/{repo_name}", "--data-urlencode", f"remote_url={repo_url}"])
             repo_info = json.loads(repo_resp)
             if "stats" in repo_info:
                 last_commit = repo_info["stats"].get("last_commit_id")
@@ -151,11 +155,20 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None):
         print(f"[*] Cleaning up temporary clone...")
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+def select_branch_name(repo_name, tmp_dir, commit, branch_param=None):
+    """Selects the branch name. Returns f'{repo_name}##{branch}' if not default branch."""
+    head = run_cmd(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], tmp_dir).split("/")[-1]
+    branches = [b.strip().split("/")[-1] for b in run_cmd(["git", "branch", "-r", "--contains", commit], tmp_dir).splitlines() if "->" not in b]
+    selected = branch_param or (head if head in branches else branches[0] if len(branches) == 1 else None)
+    if not selected: print(f"[!] Error: {commit} is on multiple branches: {branches}. Use --branch"); sys.exit(1)
+    return f"{repo_name}##{selected}" if selected != head else repo_name
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Upload repository for indexing')
     parser.add_argument('repo_url', help='Remote URL of the repository')
     parser.add_argument('api_url', help='URL of the Codegraph API')
     parser.add_argument('target_commit', nargs='?', default=None, help='Target commit ID (default: HEAD)')
+    parser.add_argument('--branch', default=None, help='Target branch name')
     
     args = parser.parse_args()
-    upload_repo(args.repo_url, args.api_url, args.target_commit)
+    upload_repo(args.repo_url, args.api_url, args.target_commit, args.branch)
