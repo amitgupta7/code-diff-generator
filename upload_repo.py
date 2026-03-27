@@ -24,12 +24,13 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None, b
 
     # 1. Resolve Target Commit BEFORE cloning if not provided
     if not target_commit:
-        print(f"[*] Resolving remote HEAD for {repo_url}...")
+        ref_to_resolve = branch if branch else "HEAD"
+        print(f"[*] Resolving remote {ref_to_resolve} for {repo_url}...")
         try:
-            ls_remote = run_cmd(["git", "ls-remote", repo_url, "HEAD"])
+            ls_remote = run_cmd(["git", "ls-remote", repo_url, ref_to_resolve])
             target_commit = ls_remote.split()[0]
         except Exception as e:
-            print(f"[!] Error resolving remote HEAD: {e}")
+            print(f"[!] Error resolving remote {ref_to_resolve}: {e}")
             sys.exit(1)
     
     print(f"[*] Target Commit: {target_commit}")
@@ -156,12 +157,12 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None, b
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 def select_branch_name(repo_name, tmp_dir, commit, branch_param=None):
-    """Selects the branch name. Returns f'{repo_name}##{branch}' if not default branch."""
+    """Selects the branch name. Returns f'{repo_name}@@{branch}' if not default branch."""
     head = run_cmd(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], tmp_dir).split("/")[-1]
     branches = [b.strip().split("/")[-1] for b in run_cmd(["git", "branch", "-r", "--contains", commit], tmp_dir).splitlines() if "->" not in b]
     selected = branch_param or (head if head in branches else branches[0] if len(branches) == 1 else None)
     if not selected: print(f"[!] Error: {commit} is on multiple branches: {branches}. Use --branch"); sys.exit(1)
-    return f"{repo_name}##{selected}" if selected != head else repo_name
+    return f"{repo_name}@@{selected}" if selected != head else repo_name
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Upload repository for indexing')
