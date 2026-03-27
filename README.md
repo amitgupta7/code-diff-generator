@@ -8,35 +8,16 @@ This utility clones a repository, calculates the changes since the last indexed 
 
 ## Usage
 
+### Indexing the latest HEAD
+This will pull the latest commit from the default branch.
 ```bash
-python3 upload_repo.py <repo_url> <api_url> [target_commit]
+python3 upload_repo.py https://github.com/vllm-project/vllm https://codegraph.guardops.ai
 ```
 
-### Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `repo_url` | Remote URL of the Git repository (e.g., `https://github.com/torvalds/linux`) |
-| `api_url` | URL of the Codegraph API server (e.g., `https://codegraph.guardops.ai`) |
-| `target_commit` | *(Optional)* Specific commit ID to index. Defaults to HEAD if not provided. |
-
-### Examples
-
-Index the latest commit of the Linux kernel:
+### Indexing a specific branch
+This will pull the latest on the branch and create a "branch" index, separate from the default branch.
 ```bash
-python3 upload_repo.py https://github.com/torvalds/linux https://codegraph.guardops.ai
-```
-
-Index a specific commit:
-```bash
-python3 upload_repo.py https://github.com/torvalds/linux https://codegraph.guardops.ai a1b2c3d4e5f6
-```
-
-### Advanced Usage
-
-Update all repositories already known to the server:
-```bash
-curl -s https://codegraph.guardops.ai/repo | jq -r '.repos[] | select (.remote_url != null) | .remote_url' | xargs -I {} python3 upload_repo.py {} https://codegraph.guardops.ai
+python3 upload_repo.py https://github.com/vllm-project/vllm https://codegraph.guardops.ai --branch "v0.18.1"
 ```
 
 ## Makefile Targets
@@ -48,23 +29,18 @@ A `Makefile` is provided to simplify running the script in various environments.
 You can override these variables when running `make`:
 - `REPO_URL`: URL of the repository to index.
 - `API_URL`: URL of the Codegraph API.
-- `COMMIT_ID`: *(Optional)* Specific commit to index.
 - `IMAGE`: Docker image to use (default: `cicirello/pyaction:latest`).
 - `NAMESPACE`: Kubernetes namespace (default: `upload-repo`).
 
-### Local & Container Execution
+### Container Execution
 
-- `make local-run`: Runs the script directly using the local Python environment.
-  ```bash
-  make local-run REPO_URL=https://github.com/torvalds/linux COMMIT_ID=a1b2c3d
-  ```
 - `make docker-run`: Runs the script inside a Docker container.
   ```bash
   make docker-run REPO_URL=https://github.com/torvalds/linux
   ```
 - `make kube-run`: Packages the script as a ConfigMap and launches a one-off `kubectl run` pod in a dedicated namespace.
   ```bash 
-  make kube-run REPO_URL=https://github.com/torvalds/linux API_URL=http://search-api-service.default.svc.cluster.local:8000 COMMIT_ID=a1b2c3d
+  make kube-run REPO_URL=https://github.com/torvalds/linux API_URL=http://search-api-service.default.svc.cluster.local:8000
   ```
 
 ### Utility Targets
@@ -94,29 +70,5 @@ You can override these variables when running `make`:
 ## Requirements
 
 - Python 3.10+
-- Git installed and available in PATH
+- `git` installed and available in PATH
 - `curl` installed and available in PATH
-
-## API Endpoints
-
-The tool communicates with the following Codegraph API endpoints:
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/repo/{repo_name}` | GET | Get repository status and last indexed commit |
-| `/job?repo={repo_name}&commit_id={commit}` | GET | Check if a job exists for the given commit |
-| `/repo/{repo_name}/index` | POST | Upload repository files for indexing |
-
-## Payload Format
-
-The uploaded ZIP file contains:
-- `change_list.json`: JSON file listing new, modified, and deleted files
-- `repo/{filepath}`: File contents for new and modified files
-
-Example `change_list.json`:
-```json
-{
-  "new": ["src/new_file.py"],
-  "modified": ["src/updated_file.py"],
-  "deleted": ["src/old_file.py"]
-}
