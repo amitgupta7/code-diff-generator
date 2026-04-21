@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import uuid
@@ -9,6 +10,19 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+def is_valid_url(url):
+    url_pattern = re.compile(
+        r'^(?!.*@)'
+        r'https?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?)'  # domain...
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?][^@\s]+)?$', re.IGNORECASE)
+    return re.match(url_pattern, url or "") is not None
+
+def isValidBranchOrCommit(str):
+    pattern = r'^(?!.*(?:\.\.|@{|//))[a-zA-Z0-9][a-zA-Z0-9._\-/]*$'
+    return re.match(pattern, str or "") is not None
+
 def run_cmd(args, cwd=None):
     try:
         return subprocess.check_output(args, cwd=cwd, stderr=subprocess.STDOUT).decode("utf-8").strip()
@@ -18,6 +32,9 @@ def run_cmd(args, cwd=None):
 
 def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None, branch: str | None = None):
     # Calculate REPO_NAME from REPO_URL
+    if not is_valid_url(api_url) or not is_valid_url(repo_url):
+        print("Invalid API or Repo Url")
+        sys.exit(1)
     repo_name = repo_url.split("/")[-1].replace(".git", "")
     print(f"[*] Repo Name: {repo_name}")
     print(f"[*] API URL:   {api_url}")
@@ -25,14 +42,18 @@ def upload_repo(repo_url: str, api_url: str, target_commit: str | None = None, b
     # 1. Resolve Target Commit BEFORE cloning if not provided
     if not target_commit:
         ref_to_resolve = branch if branch else "HEAD"
-        print(f"[*] Resolving remote {ref_to_resolve} for {repo_url}...")
-        try:
-            ls_remote = run_cmd(["git", "ls-remote", repo_url, ref_to_resolve])
-            target_commit = ls_remote.split()[0]
-        except Exception as e:
-            print(f"[!] Error resolving remote {ref_to_resolve}: {e}")
-            sys.exit(1)
+        if isValidBranchOrCommit(ref_to_resolve):
+            print(f"[*] Resolving remote {ref_to_resolve} for {repo_url}...")
+            try:
+                ls_remote = run_cmd(["git", "ls-remote", "--", repo_url, ref_to_resolve])
+                target_commit = ls_remote.split()[0]
+            except Exception as e:
+                print(f"[!] Error resolving remote branch {ref_to_resolve}: {e}")
+                sys.exit(1)
     
+    if not isValidBranchOrCommit(target_commit):
+        print("Invalid branch or commit string")
+        sys.exit(1)
     print(f"[*] Target Commit: {target_commit}")
 
     # 2. Pre-flight check: Check if job already exists or repo is already indexed
